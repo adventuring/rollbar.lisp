@@ -218,7 +218,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
         :lisp-implementation-version (lisp-implementation-version)
         :short-site-name (short-site-name)
         :long-site-name (long-site-name)
-        :root (asdf:component-relative-pathname :rollbar)
+        :root (asdf:component-relative-pathname (asdf:find-system :rollbar))
         :branch *code-version*
         :code_version *code-version*))
 
