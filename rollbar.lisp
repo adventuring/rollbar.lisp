@@ -272,7 +272,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                   (if condition
                                                       (condition-telemetry condition)
                                                       (list))
-                                                  (if hunchentoot:*request*
+                                                  (if (boundp 'hunchentoot:*request*)
                                                       (request-telemetry)
                                                       (list)))
                                             ;; TODO: person requires framework coöperation
