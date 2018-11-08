@@ -206,9 +206,78 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                    :revision revision
                                                    :environment environment))))
 
-(defun send-rollbar-notification (level message backtrace)
+(defun report-server-info ()
+  (list :cpu #+x86-64 "x86-64"
+        #-x86-64 (machine-type) 
+        :machine-type (machine-type)
+        :host (machine-instance)
+        :machine-instance (machine-instance)
+        :software (software-type)
+        :software-version (software-version)
+        :lisp-implementation-type (lisp-implementation-type)
+        :lisp-implementation-version (lisp-implementation-version)
+        :short-site-name (short-site-name)
+        :long-site-name (long-site-name)
+        :root (asdf:component-relative-pathname :rollbar)
+        :branch *code-version*
+        :code_version *code-version*))
+
+(defun report-telemetry (level message backtrace)
+  (list :level level
+        :type "error"
+        :source "server"
+        :timestamp_ms (* 1000
+                         (- (get-universal-time)
+                            #.(encode-universal-time 0 0 0 1 1 1970)))
+        :body (list :message message)
+        :trace backtrace
+        :platform (software-type)
+        :code_version *code-version*
+        :language :common-lisp
+        :framework *framework*
+        :server (report-server-info)
+        :uuid (uuid:make-v4-uuid)
+        :notifier (list :name "rollbar.lisp"
+                        :version "0.0.1")))
+
+(defun condition-telemetry (condition)
+  (list :exception (list :class (class-of condition)
+                         :message (princ-to-string condition)
+                         :description (print-object condition nil))))
+
+(defun request-telemetry ()
+  (list :request (list :url (hunchentoot:request-uri*)
+                       :method (hunchentoot:request-method*)
+                       :headers (hunchentoot:headers-in*)
+                       "GET" (hunchentoot:get-parameters*)
+                       :query_string (hunchentoot:query-string*)
+                       "POST" (hunchentoot:post-parameters*)
+                       :user_ip (hunchentoot:remote-addr*))
+        :client (list :javascript
+                      (list :browser (hunchentoot:header-in* "User-Agent")))))
+
+(defun send-rollbar-notification (level message backtrace &key condition)
   "Send a notification to Rollbar."
-  )
+  (unless (eql *environment* :devel)
+    (http-successful-request
+     "https://api.rollbar.com/api/1/item/" 
+     :method :post :content-type "application/json"
+     :content 
+     (to-json 
+      (list :access-token *access-token*
+            :data (list :environment *environment*
+                        :body (list :telemetry
+                                    (reduce #'append
+                                            (list (report-telemetry level message backtrace)
+                                                  (if condition
+                                                      (condition-telemetry condition)
+                                                      (list))
+                                                  (if hunchentoot:*request*
+                                                      (request-telemetry)
+                                                      (list)))
+                                            ;; TODO: person requires framework coöperation
+                                            ;; person: ui, username, email 
+                                            ))))))))
 
 (defun quoted (string)
   "Return a quoted version of String"
@@ -363,7 +432,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
             ))))
     plist))
 
-(defun find-appropriate-backtrace (condition)
+(defun find-appropriate-backtrace ()
   (let ((trace))
     (block tracing
       (trivial-backtrace:map-backtrace
@@ -382,7 +451,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
            (push (backtrace-frame-to-plist frame) trace)))))
     (nreverse trace)))
 
-(defun notify (level message* &key condition)
+(defun notify (level message*)
   "Sends a notification to Rollbar of level LEVEL with message MESSAGE*.
 
 If CONDITION is given, useful information is extracted therefrom (eg,
@@ -404,7 +473,7 @@ A log entry will also be printed to *TRACE-OUTPUT* for levels “debug” or
                    (string message*)
                    (symbol (format-symbol-name-carefully message*))
                    (otherwise (princ-to-string message*))))
-        (backtrace (find-appropriate-backtrace condition)))
+        (backtrace (find-appropriate-backtrace)))
     (send-rollbar-notification (string-downcase level) message backtrace)))
 
 (defgeneric classify-error-level (condition)
@@ -426,8 +495,7 @@ Note  that `SERIOUS-CONDITION'  maps  to“error,” while  `ERROR' maps  to
 This is usually activated through `WITH-ROLLBAR-FOR-DEBUGGER'."
   (declare (ignore hook)) ; TODO?
   (notify (classify-error-level condition)
-          (princ-to-string condition)
-          :condition condition))
+          (princ-to-string condition)))
 
 (defun chain-debugger-hook ()
   "Create a function that calls `DEBUGGER-HOOK'.
