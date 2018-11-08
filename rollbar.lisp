@@ -193,7 +193,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
 
 (defun http-successful-request (uri &rest keys &key  &allow-other-keys)
   (multiple-value-bind (body status headers reply-uri body-stream body-stream-closeable-p status-line)
-      (apply #'http-request uri keys)
+      (apply #'http-request :encoding :utf-8 uri keys)
     (declare (ignore body body-stream body-stream-closeable-p))
     (unless (< status 400)
       (error 'http-error :status status :status-text status-line
