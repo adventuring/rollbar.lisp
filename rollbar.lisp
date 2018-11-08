@@ -193,7 +193,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
 
 (defun http-successful-request (uri &rest keys &key  &allow-other-keys)
   (multiple-value-bind (body status headers reply-uri body-stream body-stream-closeable-p status-line)
-      (apply #'http-request uri keys)
+      (apply #'http-request uri :external-format-out :utf-8 keys)
     (declare (ignore body body-stream body-stream-closeable-p))
     (unless (< status 400)
       (error 'http-error :status status :status-text status-line
@@ -206,9 +206,79 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                    :revision revision
                                                    :environment environment))))
 
-(defun send-rollbar-notification (level message backtrace)
+(defun report-server-info ()
+  (list :|cpu| #+x86-64 "x86-64"
+        #-x86-64 (machine-type) 
+        :|machine-type| (machine-type)
+        :|host| (machine-instance)
+        :|machine-instance| (machine-instance)
+        :|software| (software-type)
+        :|software-version| (software-version)
+        :|lisp-implementation-type| (lisp-implementation-type)
+        :|lisp-implementation-version| (lisp-implementation-version)
+        :|short-site-name| (short-site-name)
+        :|long-site-name| (long-site-name)
+        :|root| (princ-to-string (asdf:component-relative-pathname (asdf:find-system :rollbar)))
+        :|branch| *code-version*
+        :|code_version| *code-version*))
+
+(defun report-telemetry (level)
+  (list :|level| level
+        :|type| "error"
+        :|source| "server"
+        :|timestamp_ms| (* 1000
+                           (- (get-universal-time)
+                              #.(encode-universal-time 0 0 0 1 1 1970))) 
+        :|platform| (software-type)
+        :|code_version| *code-version*
+        :|language| "Common Lisp"
+        :|framework| *framework*
+        :|server| (report-server-info)
+        :|uuid| (princ-to-string (uuid:make-v4-uuid))
+        :|notifier| (list :|name| "rollbar.lisp"
+                          :|version| "0.0.1")))
+
+(defun condition-telemetry (condition)
+  (list :|exception| (list :|class| (princ-to-string (class-name (class-of condition)))
+                           :|message| (princ-to-string condition)
+                           :|description| (print-object condition nil))))
+
+(defun request-telemetry ()
+  (list :|request| (list :|url| (hunchentoot:request-uri*)
+                         :|method| (hunchentoot:request-method*)
+                         :|headers| (hunchentoot:headers-in*)
+                         :GET (hunchentoot:get-parameters*)
+                         :|query_string| (hunchentoot:query-string*)
+                         :POST (hunchentoot:post-parameters*)
+                         :|user_ip| (hunchentoot:remote-addr*))
+        :|client| (list :|javascript|
+                        (list :|browser| (hunchentoot:header-in* "User-Agent")))))
+
+(defun send-rollbar-notification (level message backtrace &key condition)
   "Send a notification to Rollbar."
-  )
+  (unless (eql *environment* :devel)
+    (http-request
+     "https://api.rollbar.com/api/1/item/" 
+     :method :post :content-type "application/json"
+     :external-format-out :utf-8
+     :content 
+     (print (to-json 
+             (list :|access_token| *access-token*
+                   :|data| (list :|environment| *environment*
+                                 :|body| 
+                                 (reduce #'append
+                                         (list (report-telemetry level)
+                                               (if backtrace
+                                                   (list :|trace| 
+                                                         (append (list :|frames| backtrace)
+                                                                 (condition-telemetry condition)))
+                                                   (list :|message| (list :|body| message))) 
+                                               (if (boundp 'hunchentoot:*request*)
+                                                   (request-telemetry)
+                                                   (list)))
+                                         ;; TODO: person requires framework coöperation
+                                         ;; person: ui, username, email 
+                                         ))))))))
 
 (defun quoted (string)
   "Return a quoted version of String"
@@ -281,9 +351,11 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                       (+ top-level-form 5))
                    (push form post))
                   (t (return-from gather)))))))
-    (list :code code
-          :context
-          (list :pre (reverse pre) :post (reverse post)))))
+    (when code
+      (list :|code| (format nil "~s" code)
+            :|context|
+            (list :|pre| (reverse (mapcar (lambda (f) (format nil "~s" f)) pre))
+                  :|post| (reverse (mapcar (lambda (f) (format nil "~s" f)) post)))))))
 
 (defun pretty-function-name (function)
   "Pretty-print the name (and type information) of FUNCTION"
@@ -316,16 +388,14 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                            :junk-allowed t)))
       (when-let (source-filename (trivial-backtrace::frame-source-filename
                                   frame))
-        (push (sanitize-file-name source-filename) plist)
-        (push :source-filename plist)
+        (push (princ-to-string (sanitize-file-name source-filename)) plist)
+        (push :|source_filename| plist)
         (when (and top-level-form (probe-file source-filename))
-          (setf plist
-                (cons (gather-source-info source-filename
-                                          top-level-form form-number)
-                      plist))))
+          (appendf plist (gather-source-info source-filename
+                                             top-level-form form-number))))
       (when-let (function (trivial-backtrace::frame-func frame))
         (push (pretty-function-name function) plist)
-        (push :method plist)
+        (push :|method| plist)
         (when (and (symbolp function) (symbol-function function))
           (multiple-value-bind (_0
                                 positional optional
@@ -336,7 +406,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
             (declare (ignore _0 _5 _6 _7))
             (when positional
               (push (mapcar #'pretty-symbol-name positional) plist)
-              (push :args plist))
+              (push :|args| plist))
             (when (or optional rest)
               (let (varargs)
                 (when optional
@@ -350,20 +420,18 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                 (rest arg)))))
                                 optional)))
                 (when rest
-                  (setf varargs (cons varargs
-                                      (format nil "(&Rest: ~a)"
-                                              (pretty-symbol-name rest)))))
+                  (appendf varargs (format nil "(&Rest: ~a)"
+                                           (pretty-symbol-name rest))))
                 (push varargs plist))
-              (push :varargspec plist))
+              (push :|varargspec| plist))
             (when keywords
               (let ((*print-case* :capitalize))
                 (push (mapcar (lambda (x) (format nil "~s" x)) keywords)
                       plist))
-              (push :keywordspec plist))
-            ))))
+              (push :|keywordspec| plist))))))
     plist))
 
-(defun find-appropriate-backtrace (condition)
+(defun find-appropriate-backtrace ()
   (let ((trace))
     (block tracing
       (trivial-backtrace:map-backtrace
@@ -378,9 +446,9 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                (return-from tracing))
              (when (equal func 'find-appropriate-backtrace)
                (setf trace nil)
-               (return-from push-frame)))
+               (return-from push-frame))) 
            (push (backtrace-frame-to-plist frame) trace)))))
-    (nreverse trace)))
+    (coerce (nreverse trace) 'vector)))
 
 (defun notify (level message* &key condition)
   "Sends a notification to Rollbar of level LEVEL with message MESSAGE*.
@@ -404,8 +472,8 @@ A log entry will also be printed to *TRACE-OUTPUT* for levels “debug” or
                    (string message*)
                    (symbol (format-symbol-name-carefully message*))
                    (otherwise (princ-to-string message*))))
-        (backtrace (find-appropriate-backtrace condition)))
-    (send-rollbar-notification (string-downcase level) message backtrace)))
+        (backtrace (find-appropriate-backtrace)))
+    (send-rollbar-notification (string-downcase level) message backtrace :condition condition)))
 
 (defgeneric classify-error-level (condition)
   (:documentation "Given CONDITION, return the Rollbar level for it.
@@ -460,6 +528,6 @@ Calls `NOTIFY' like (NOTIFY \"" level "\" MESSAGE …).
 
 The ! in the name is so that ROLLBAR:ERROR! does not shadow CL:ERROR,
 and so that all levels share the same orthography.")
-      (funcall #'notify ,level message* :condition condition))))
+      (funcall #'notify ,(string-downcase level) message*))))
 
 (map nil #'make-level-notifier *valid-notifier-levels*)
