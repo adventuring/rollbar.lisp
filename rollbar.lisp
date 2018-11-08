@@ -528,6 +528,6 @@ Calls `NOTIFY' like (NOTIFY \"" level "\" MESSAGE …).
 
 The ! in the name is so that ROLLBAR:ERROR! does not shadow CL:ERROR,
 and so that all levels share the same orthography.")
-      (funcall #'notify ,level message* :condition condition))))
+      (funcall #'notify ,level message*))))
 
 (map nil #'make-level-notifier *valid-notifier-levels*)
