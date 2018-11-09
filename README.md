@@ -4,7 +4,8 @@ reports, mostly) through their web service.
 This package is  a completely independent attempt  to re-implement their
 general “per-language”  APIs in such  a way as  to be useful  for Common
 Lisp programs.  It is not  particularly “authorized” and  definitely not
-“supported” by Rollbar.
+“supported” by Rollbar,  but they have kindly  added it to their list of
+third-party libraries, so it's not unknown to them.
 
 Automatic telemetry
 -------------------
