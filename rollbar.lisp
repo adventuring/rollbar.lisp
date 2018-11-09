@@ -1,3 +1,12 @@
+;;;;
+;;;; Rollbar.lisp
+;;;;
+;;;; Copyright © 2018 Bruce-Robert Pocock
+;;;;
+;;;; This system is licensed under the terms of the BSD license, found in
+;;;; the accompanying file LICENSE, but you are strongly encouraged to
+;;;; publish any modifications.
+;;;;
 (cl:in-package :cl-user)
 (require :drakma)
 (require :alexandria)
@@ -207,6 +216,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                    :environment environment))))
 
 (defun report-server-info ()
+  "Generate the server-info Plist for the error report"
   (list :|cpu| #+x86-64 "x86-64"
         #-x86-64 (machine-type) 
         :|machine-type| (machine-type)
@@ -223,6 +233,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
         :|code_version| *code-version*))
 
 (defun report-telemetry (level)
+  "Generates some general information for the error report"
   (list :|level| level
         :|type| "error"
         :|source| "server"
@@ -432,6 +443,10 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
     plist))
 
 (defun find-appropriate-backtrace ()
+  "Finds a backtrace without too much “noise.”
+  
+Attempts to eliminate “uninteresting” frames from the trace, and formats it
+in a form that Rollbar likes."
   (let ((trace))
     (block tracing
       (trivial-backtrace:map-backtrace
