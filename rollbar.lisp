@@ -1,3 +1,11 @@
+;;;;
+;;;; Rollbar.lisp
+;;;;
+;;;; Copyright © 2018 Bruce-Robert Pocock
+;;;;
+;;;; This system is  licensed under the terms of the  BSD license, found
+;;;; in the accompanying  file LICENSE, but you  are strongly encouraged
+;;;; to publish any modifications.
 (cl:in-package :cl-user)
 (require :drakma)
 (require :alexandria)
@@ -207,8 +215,9 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                    :environment environment))))
 
 (defun report-server-info ()
+  "Generate the server-info Plist for the error report"
   (list :|cpu| #+x86-64 "x86-64"
-        #-x86-64 (machine-type) 
+        #-x86-64 (machine-type)
         :|machine-type| (machine-type)
         :|host| (machine-instance)
         :|machine-instance| (machine-instance)
@@ -223,12 +232,13 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
         :|code_version| *code-version*))
 
 (defun report-telemetry (level)
+  "Generates some general information for the error report"
   (list :|level| level
         :|type| "error"
         :|source| "server"
         :|timestamp_ms| (* 1000
                            (- (get-universal-time)
-                              #.(encode-universal-time 0 0 0 1 1 1970))) 
+                              #.(encode-universal-time 0 0 0 1 1 1970)))
         :|platform| (software-type)
         :|code_version| *code-version*
         :|language| "Common Lisp"
@@ -258,26 +268,26 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
   "Send a notification to Rollbar."
   (unless (eql *environment* :devel)
     (http-request
-     "https://api.rollbar.com/api/1/item/" 
+     "https://api.rollbar.com/api/1/item/"
      :method :post :content-type "application/json"
      :external-format-out :utf-8
-     :content 
-     (print (to-json 
+     :content
+     (print (to-json
              (list :|access_token| *access-token*
                    :|data| (list :|environment| *environment*
-                                 :|body| 
+                                 :|body|
                                  (reduce #'append
                                          (list (report-telemetry level)
                                                (if backtrace
-                                                   (list :|trace| 
+                                                   (list :|trace|
                                                          (append (list :|frames| backtrace)
                                                                  (condition-telemetry condition)))
-                                                   (list :|message| (list :|body| message))) 
+                                                   (list :|message| (list :|body| message)))
                                                (if (boundp 'hunchentoot:*request*)
                                                    (request-telemetry)
                                                    (list)))
                                          ;; TODO: person requires framework coöperation
-                                         ;; person: ui, username, email 
+                                         ;; person: ui, username, email
                                          ))))))))
 
 (defun quoted (string)
@@ -432,6 +442,10 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
     plist))
 
 (defun find-appropriate-backtrace ()
+  "Finds a backtrace without too much “noise.”
+
+Attempts to eliminate “uninteresting” frames from the trace, and formats it
+in a form that Rollbar likes."
   (let ((trace))
     (block tracing
       (trivial-backtrace:map-backtrace
@@ -446,7 +460,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                (return-from tracing))
              (when (equal func 'find-appropriate-backtrace)
                (setf trace nil)
-               (return-from push-frame))) 
+               (return-from push-frame)))
            (push (backtrace-frame-to-plist frame) trace)))))
     (coerce (nreverse trace) 'vector)))
 
