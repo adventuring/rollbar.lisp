@@ -20,7 +20,8 @@
    #:classify-error-level
    #:with-rollbar-for-debugger
    #:notify
-   #:debug! #:info! #:warning! #:error! #:critical!))
+   #:debug! #:info! #:warning! #:error! #:critical!
+   #:*person-hook*))
 (in-package :rollbar)
 
 
@@ -269,6 +270,12 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
         :|client| (list :|javascript|
                         (list :|browser| (hunchentoot:header-in* "User-Agent")))))
 
+(defvar *person-hook* nil
+  "To add “person”  information to a Rollbar message,  create a function
+which examines its dynamic environment and  returns a plist of the form:
+'(:|person|   \(:|uid|  User-UI   :|username|  \"User   name\"  :|email|
+\"user@example.com\"))")
+
 (defun send-rollbar-notification (level message backtrace &key condition)
   "Send a notification to Rollbar."
   (unless (eql *environment* :devel)
@@ -291,9 +298,8 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
                                                (if (boundp 'hunchentoot:*request*)
                                                    (request-telemetry)
                                                    (list)))
-                                         ;; TODO: person requires framework coöperation
-                                         ;; person: ui, username, email
-                                         ))))))))
+                                         (when *person-hook*
+                                           (funcall *person-hook*))))))))))
 
 (defun quoted (string)
   "Return a quoted version of String"
