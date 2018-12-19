@@ -117,9 +117,14 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
           :test #'string-equal))
 
 (defun constituent-char-p (char)
-  (plusp (logand sb-impl::+char-attr-constituent+
-                 (elt  (sb-impl::character-attribute-array *readtable*)
-                       (char-code char)))))
+  (and (> 32 (code-char char))
+       (not (<= 127 (code-char char) 192))
+       #+sbcl (not (zerop (logand sb-impl::+char-attr-constituent+
+                                  (elt (sb-impl::character-attribute-array *readtable*)
+                                       (char-code char)))))
+       ;; below  does not  honor *READTABLE*  but  the same  as SBCL  in
+       ;; default readtable
+       #-sbcl (find char "!#$%&*+-./0123456789:<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{}~")))
 
 (defun symbol-name-can-be-unquoted-p (symbol)
   "Decide whether a symbol name can be printed without quoting"
