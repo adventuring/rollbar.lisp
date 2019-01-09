@@ -297,9 +297,9 @@ which examines its dynamic environment and  returns a plist of the form:
                                                    (list :|message| (list :|body| message)))
                                                (if (boundp 'hunchentoot:*request*)
                                                    (request-telemetry)
-                                                   (list)))
-                                         (when *person-hook*
-                                           (funcall *person-hook*))))))))))
+                                                   (list))
+                                               (when *person-hook*
+                                                 (funcall *person-hook*)))))))))))
 
 (defun quoted (string)
   "Return a quoted version of String"
