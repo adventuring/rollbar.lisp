@@ -118,8 +118,8 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
           :test #'string-equal))
 
 (defun constituent-char-p (char)
-  (and (> 32 (code-char char))
-       (not (<= 127 (code-char char) 192))
+  (and (> 32 (char-code char))
+       (not (<= 127 (char-code char) 192))
        #+sbcl (not (zerop (logand sb-impl::+char-attr-constituent+
                                   (elt (sb-impl::character-attribute-array *readtable*)
                                        (char-code char)))))
