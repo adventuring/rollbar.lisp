@@ -350,28 +350,32 @@ which examines its dynamic environment and  returns a plist of the form:
 (defun gather-source-info (filename top-level-form form-number)
   "Get source code information for a frame in a backtrace"
   (declare (ignore form-number))
+  (when (equal "SYS" (pathname-host filename))
+    (return-from gather-source-info
+      (list :|code| "System function.")))
   (let ((pre '()) (code nil) (post '()))
     (block gather
-      (with-open-file (file filename :direction :input)
-        (loop for form = (ignore-errors (read file nil :eof))
-           for top-level-count from 0
-           until (eql :eof form)
-           do (progn
-                (cond
-                  ((< top-level-count
-                      (- top-level-form +context-forms+))
-                   nil)
-                  ((< (- top-level-form +context-forms+)
-                      top-level-count
-                      top-level-form)
-                   (push form pre))
-                  ((= top-level-count top-level-form)
-                   (setf code form))
-                  ((< top-level-form
-                      top-level-count
-                      (+ top-level-form 5))
-                   (push form post))
-                  (t (return-from gather)))))))
+      (ignore-errors
+        (with-open-file (file filename :direction :input)
+          (loop for form = (ignore-errors (read file nil :eof))
+             for top-level-count from 0
+             until (eql :eof form)
+             do (progn
+                  (cond
+                    ((< top-level-count
+                        (- top-level-form +context-forms+))
+                     nil)
+                    ((< (- top-level-form +context-forms+)
+                        top-level-count
+                        top-level-form)
+                     (push form pre))
+                    ((= top-level-count top-level-form)
+                     (setf code form))
+                    ((< top-level-form
+                        top-level-count
+                        (+ top-level-form 5))
+                     (push form post))
+                    (t (return-from gather))))))))
     (when code
       (list :|code| (format nil "~s" code)
             :|context|
@@ -459,20 +463,21 @@ Attempts to eliminate “uninteresting” frames from the trace, and formats it
 in a form that Rollbar likes."
   (let ((trace))
     (block tracing
-      (trivial-backtrace:map-backtrace
-       (lambda (frame)
-         (block push-frame
-           (let ((func (trivial-backtrace::frame-func frame)))
-             (when (or
-                    (and (stringp func)
-                         (string-equal func "foreign function: call_into_lisp"))
-                    (and (symbolp func)
-                         (equal (symbol-package func) (find-package :swank))))
-               (return-from tracing))
-             (when (equal func 'find-appropriate-backtrace)
-               (setf trace nil)
-               (return-from push-frame)))
-           (push (backtrace-frame-to-plist frame) trace)))))
+      (ignore-errors 
+        (trivial-backtrace:map-backtrace
+         (lambda (frame)
+           (block push-frame
+             (let ((func (ignore-errors (trivial-backtrace::frame-func frame))))
+               (when (or
+                      (and (stringp func)
+                           (string-equal func "foreign function: call_into_lisp"))
+                      (and (symbolp func)
+                           (equal (symbol-package func) (find-package :swank))))
+                 (return-from tracing))
+               (when (equal func 'find-appropriate-backtrace)
+                 (setf trace nil)
+                 (return-from push-frame)))
+             (push (backtrace-frame-to-plist frame) trace))))))
     (coerce (nreverse trace) 'vector)))
 
 (defun notify (level message* &key condition)
