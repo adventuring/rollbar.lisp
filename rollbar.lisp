@@ -350,7 +350,8 @@ which examines its dynamic environment and  returns a plist of the form:
 (defun gather-source-info (filename top-level-form form-number)
   "Get source code information for a frame in a backtrace"
   (declare (ignore form-number))
-  (when (equal "SYS" (pathname-host filename))
+  (when (equal "SYS" (slot-value (pathname-host filename)
+                                 'sb-impl::name))
     (return-from gather-source-info
       (list :|code| "System function.")))
   (let ((pre '()) (code nil) (post '()))
