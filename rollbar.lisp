@@ -78,7 +78,12 @@ Typically only invoked once at startup."
     (setf *framework* framework))
   (when server-present-p
     (check-type server string)
-    (setf *server* server)))
+    (setf *server* server))
+  (list :access-token *access-token*
+        :environment *environment*
+        :code-version *code-version*
+        :framework *framework*
+        :server *server*))
 
 (defvar *valid-notifier-levels* '("critical" "error" "warning" "info" "debug")
   "The levels which Rollbar accepts")
@@ -262,7 +267,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
 (defun request-telemetry ()
   (list :|request| (list :|url| (hunchentoot:request-uri*)
                          :|method| (hunchentoot:request-method*)
-                         :|headers| (hunchentoot:headers-in*)
+                         :|headers| (alist-plist (hunchentoot:headers-in*))
                          :GET (hunchentoot:get-parameters*)
                          :|query_string| (hunchentoot:query-string*)
                          :POST (hunchentoot:post-parameters*)
@@ -285,25 +290,35 @@ which examines its dynamic environment and  returns a plist of the form:
      :external-format-out :utf-8
      :content
      (print (to-json
-             (list :|access_token| *access-token*
-                   :|data| (list :|environment| *environment*
-                                 :|body|
-                                 (reduce #'append
-                                         (list (report-telemetry level)
-                                               (if backtrace
-                                                   (list :|trace|
-                                                         (append (list :|frames| backtrace)
-                                                                 (condition-telemetry condition)))
-                                                   (list :|message| (list :|body| message)))
-                                               (if (boundp 'hunchentoot:*request*)
-                                                   (request-telemetry)
-                                                   (list))
-                                               (when *person-hook*
-                                                 (funcall *person-hook*)))))))))))
+             (list
+              :|access_token| *access-token*
+              :|data| (list
+                       :|environment| *environment*
+                       :|body|
+                       (reduce 
+                        #'append
+                        (list (report-telemetry level)
+                              (if backtrace
+                                  (list
+                                   :|trace|
+                                   (append (list :|frames| backtrace)
+                                           (if condition
+                                               (condition-telemetry condition)
+                                               (list
+                                                :|exception| (list
+                                                              :|message| message)))))
+                                  (list
+                                   :|message| (list
+                                               :|body| message)))
+                              (if (boundp 'hunchentoot:*request*)
+                                  (request-telemetry)
+                                  (list))
+                              (when *person-hook*
+                                (funcall *person-hook*)))))))))))
 
 (defun quoted (string)
   "Return a quoted version of String"
-  (with-output-to-string (s) (print string s)))
+  (delete #\Newline (with-output-to-string (s) (print string s))))
 
 (defun redact-directory (directory)
   "Redact uninteresting parts of a directory pathname"
@@ -350,8 +365,9 @@ which examines its dynamic environment and  returns a plist of the form:
 (defun gather-source-info (filename top-level-form form-number)
   "Get source code information for a frame in a backtrace"
   (declare (ignore form-number))
-  (when (equal "SYS" (slot-value (pathname-host filename)
-                                 'sb-impl::name))
+  (when (and (typep (pathname-host filename) 'sb-kernel:logical-host)
+             (equal "SYS" (slot-value (pathname-host filename)
+                                      'sb-impl::name)))
     (return-from gather-source-info
       (list :|code| "System function.")))
   (let ((pre '()) (code nil) (post '()))
@@ -464,21 +480,20 @@ Attempts to eliminate “uninteresting” frames from the trace, and formats it
 in a form that Rollbar likes."
   (let ((trace))
     (block tracing
-      (ignore-errors 
-        (trivial-backtrace:map-backtrace
-         (lambda (frame)
-           (block push-frame
-             (let ((func (ignore-errors (trivial-backtrace::frame-func frame))))
-               (when (or
-                      (and (stringp func)
-                           (string-equal func "foreign function: call_into_lisp"))
-                      (and (symbolp func)
-                           (equal (symbol-package func) (find-package :swank))))
-                 (return-from tracing))
-               (when (equal func 'find-appropriate-backtrace)
-                 (setf trace nil)
-                 (return-from push-frame)))
-             (push (backtrace-frame-to-plist frame) trace))))))
+      (trivial-backtrace:map-backtrace
+       (lambda (frame)
+         (block push-frame
+           (let ((func (ignore-errors (trivial-backtrace::frame-func frame))))
+             (when (or
+                    (and (stringp func)
+                         (string-equal func "foreign function: call_into_lisp"))
+                    (and (symbolp func)
+                         (equal (symbol-package func) (find-package :swank))))
+               (return-from tracing))
+             (when (equal func 'find-appropriate-backtrace)
+               (setf trace nil)
+               (return-from push-frame)))
+           (push (backtrace-frame-to-plist frame) trace)))))
     (coerce (nreverse trace) 'vector)))
 
 (defun notify (level message* &key condition)
@@ -502,7 +517,7 @@ A log entry will also be printed to *TRACE-OUTPUT* for levels “debug” or
   (let ((message (typecase message*
                    (string message*)
                    (symbol (format-symbol-name-carefully message*))
-                   (otherwise (princ-to-string message*))))
+                   (t (princ-to-string message*))))
         (backtrace (find-appropriate-backtrace)))
     (send-rollbar-notification (string-downcase level) message backtrace :condition condition)))
 
@@ -559,6 +574,7 @@ Calls `NOTIFY' like (NOTIFY \"" level "\" MESSAGE …).
 
 The ! in the name is so that ROLLBAR:ERROR! does not shadow CL:ERROR,
 and so that all levels share the same orthography.")
-      (funcall #'notify ,(string-downcase level) message*))))
+      (funcall #'notify ,(string-downcase level) message*
+               :condition condition))))
 
 (map nil #'make-level-notifier *valid-notifier-levels*)
