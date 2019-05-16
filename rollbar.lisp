@@ -402,7 +402,7 @@ which examines its dynamic environment and  returns a plist of the form:
 (defun pretty-function-name (function)
   "Pretty-print the name (and type information) of FUNCTION"
   (typecase function
-    (symbol (if (symbol-function function)
+    (symbol (if (ignore-errors (symbol-function function))
                 (let ((*print-right-margin* 72)
                       (*print-case* :capitalize)
                       (type (sb-introspect:function-type function)))
