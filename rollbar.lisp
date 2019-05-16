@@ -219,11 +219,12 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
              :wanted-uri uri :got-uri reply-uri :headers headers))))
 
 (defun rollbar-notify-deployment (&key user revision environment)
-  (http-successful-request "https://api.rollbar.com/api/1/deploy/" :method :post :content-type "application/json"
-                           :content (to-json (list :access-token *access-token*
-                                                   :local-username user
-                                                   :revision revision
-                                                   :environment environment))))
+  (http-successful-request "https://api.rollbar.com/api/1/deploy/"
+                           :method :post :content-type "application/json"
+                           :content (to-json (list :|access_token| *access-token*
+                                                   :|local_username| user
+                                                   :|revision| revision
+                                                   :|environment| environment))))
 
 (defun report-server-info ()
   "Generate the server-info Plist for the error report"
@@ -295,7 +296,7 @@ which examines its dynamic environment and  returns a plist of the form:
               :|data| (list
                        :|environment| *environment*
                        :|body|
-                       (reduce 
+                       (reduce
                         #'append
                         (list (report-telemetry level)
                               (if backtrace
@@ -306,7 +307,9 @@ which examines its dynamic environment and  returns a plist of the form:
                                                (condition-telemetry condition)
                                                (list
                                                 :|exception| (list
-                                                              :|message| message)))))
+                                                              :|class| "NIL"
+                                                              :|message| message
+                                                              :|description| message)))))
                                   (list
                                    :|message| (list
                                                :|body| message)))
