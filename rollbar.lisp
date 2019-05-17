@@ -290,34 +290,34 @@ which examines its dynamic environment and  returns a plist of the form:
      :method :post :content-type "application/json"
      :external-format-out :utf-8
      :content
-     (print (to-json
-             (list
-              :|access_token| *access-token*
-              :|data| (list
-                       :|environment| *environment*
-                       :|body|
-                       (reduce
-                        #'append
-                        (list (report-telemetry level)
-                              (if backtrace
-                                  (list
-                                   :|trace|
-                                   (append (list :|frames| backtrace)
-                                           (if condition
-                                               (condition-telemetry condition)
-                                               (list
-                                                :|exception| (list
-                                                              :|class| "NIL"
-                                                              :|message| message
-                                                              :|description| message)))))
-                                  (list
-                                   :|message| (list
-                                               :|body| message)))
-                              (if (boundp 'hunchentoot:*request*)
-                                  (request-telemetry)
-                                  (list))
-                              (when *person-hook*
-                                (funcall *person-hook*)))))))))))
+     (to-json
+      (list
+       :|access_token| *access-token*
+       :|data| (list
+                :|environment| *environment*
+                :|body|
+                (reduce
+                 #'append
+                 (list (report-telemetry level)
+                       (if backtrace
+                           (list
+                            :|trace|
+                            (append (list :|frames| backtrace)
+                                    (if condition
+                                        (condition-telemetry condition)
+                                        (list
+                                         :|exception| (list
+                                                       :|class| "NIL"
+                                                       :|message| message
+                                                       :|description| message)))))
+                           (list
+                            :|message| (list
+                                        :|body| message)))
+                       (if (boundp 'hunchentoot:*request*)
+                           (request-telemetry)
+                           (list))
+                       (when *person-hook*
+                         (funcall *person-hook*))))))))))
 
 (defun quoted (string)
   "Return a quoted version of String"
