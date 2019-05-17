@@ -483,20 +483,21 @@ Attempts to eliminate “uninteresting” frames from the trace, and formats it
 in a form that Rollbar likes."
   (let ((trace))
     (block tracing
-      (trivial-backtrace:map-backtrace
-       (lambda (frame)
-         (block push-frame
-           (let ((func (ignore-errors (trivial-backtrace::frame-func frame))))
-             (when (or
-                    (and (stringp func)
-                         (string-equal func "foreign function: call_into_lisp"))
-                    (and (symbolp func)
-                         (equal (symbol-package func) (find-package :swank))))
-               (return-from tracing))
-             (when (equal func 'find-appropriate-backtrace)
-               (setf trace nil)
-               (return-from push-frame)))
-           (push (backtrace-frame-to-plist frame) trace)))))
+      (ignore-errors
+        (trivial-backtrace:map-backtrace
+         (lambda (frame)
+           (block push-frame
+             (let ((func (ignore-errors (trivial-backtrace::frame-func frame))))
+               (when (or
+                      (and (stringp func)
+                           (string-equal func "foreign function: call_into_lisp"))
+                      (and (symbolp func)
+                           (equal (symbol-package func) (find-package :swank))))
+                 (return-from tracing))
+               (when (equal func 'find-appropriate-backtrace)
+                 (setf trace nil)
+                 (return-from push-frame)))
+             (push (backtrace-frame-to-plist frame) trace))))))
     (coerce (nreverse trace) 'vector)))
 
 (defun notify (level message* &key condition)
