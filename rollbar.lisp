@@ -498,7 +498,7 @@ in a form that Rollbar likes."
                  (setf trace nil)
                  (return-from push-frame)))
              (push (backtrace-frame-to-plist frame) trace))))))
-    (coerce (nreverse trace) 'vector)))
+    (coerce (nreverse (remove-if #'null trace)) 'vector)))
 
 (defun notify (level message* &key condition)
   "Sends a notification to Rollbar of level LEVEL with message MESSAGE*.
