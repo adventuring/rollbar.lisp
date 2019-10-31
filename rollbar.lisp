@@ -123,27 +123,16 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
           :test #'string-equal))
 
 (defun constituent-char-p (char)
-  (and (> 32 (char-code char))
-       (not (<= 127 (char-code char) 192))
-       #+sbcl (not (zerop (logand sb-impl::+char-attr-constituent+
-                                  (elt (sb-impl::character-attribute-array *readtable*)
-                                       (char-code char)))))
-       ;; below  does not  honor *READTABLE*  but  the same  as SBCL  in
-       ;; default readtable
-       #-sbcl (find char "!#$%&*+-./0123456789:<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_abcdefghijklmnopqrstuvwxyz{}~")))
+  (find char "!#$%&*+-./0123456789:<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[]^_{}~"))
 
 (defun symbol-name-can-be-unquoted-p (symbol)
   "Decide whether a symbol name can be printed without quoting"
-  (and (not (string= (let ((*print-case* :upcase))
-                       (princ-to-string symbol))
-                     (let ((*print-case* :downcase))
-                       (princ-to-string symbol))))
-       (every #'constituent-char-p (princ-to-string symbol))))
+  (every #'constituent-char-p (princ-to-string symbol)))
 
 (defun package-name-can-be-unquoted-p (package-name)
   "Decide whether a package name symbol can be printed without quoting"
   (and (every #'constituent-char-p package-name)
-       (equal package-name (string-upcase package-name))))
+       (string= package-name (string-upcase package-name))))
 
 (defun symbol-is-exported-p (symbol)
   "Discover whether SYMBOL is exported from its package"
@@ -174,24 +163,24 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
 
 (defun pretty-symbol-name (symbol)
   "Format the symbol-name of SYMBOL nicely for the Rollbar report"
-  (let ((first (if (symbol-name-can-be-unquoted-p symbol)
-                   (string-capitalize (symbol-name symbol))
-                   (concatenate 'string "|"
-                                (escaped (symbol-name symbol) #\\ '(#\\ #\|))
-                                "|"))))
+  (let ((pretty-name (if (symbol-name-can-be-unquoted-p symbol)
+                         (string-capitalize (symbol-name symbol))
+                         (concatenate 'string "|"
+                                      (escaped (symbol-name symbol) #\\ '(#\\ #\|))
+                                      "|"))))
     (cond
-      ((and (< 3 (length first))
-            (string-equal first "-P" :start1 (- (length first) 2)))
-       (setf (char first (1- (length first))) #\p))
-      ((and (< 3 (length first))
-            (not (find #\- first))
-            (char= #\p (char first (1- (length first))))
-            (and (not (find (char first (- (length first) 2)) "aoeui"))
-                 (not (and (find (char first (- (length first) 3)) "aoeui")
-                           (find (char first (- (length first) 2)) "nm")))))
-       (setf (char first (1- (length first))) #\P))
+      ((and (< 3 (length pretty-name))
+            (string-equal pretty-name "-P" :start1 (- (length pretty-name) 2)))
+       (setf (char pretty-name (1- (length pretty-name))) #\p))
+      ((and (< 3 (length pretty-name))
+            (not (find #\- pretty-name))
+            (char= #\p (char pretty-name (1- (length pretty-name))))
+            (and (not (find (char pretty-name (- (length pretty-name) 2)) "aoeui"))
+                 (not (and (find (char pretty-name (- (length pretty-name) 3)) "aoeui")
+                           (find (char pretty-name (- (length pretty-name) 2)) "nm")))))
+       (setf (char pretty-name (1- (length pretty-name))) #\P))
       (t))
-    first))
+    pretty-name))
 
 (defun format-symbol-name-carefully (symbol)
   "Carefully format the symbol-name of SYMBOL"
