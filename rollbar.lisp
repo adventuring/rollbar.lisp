@@ -307,12 +307,13 @@ which examines its dynamic environment and  returns a plist of the form:
                                         (condition-telemetry condition)
                                         (list
                                          :|exception| (list
-                                                       :|class| "NIL"
-                                                       :|message| message
+                                                       :|class| (format nil "~:(~a~)" (type-of condition))
+                                                       :|message| (substitute-if #\# #'digit-char-p message)
                                                        :|description| message)))))
                            (list
-                            :|message| (list
-                                        :|body| message)))
+                            :|message| (substitute-if #\# #'digit-char-p message)
+                            :|description| message
+                            :|class| (format nil "~:(~a~)" (type-of condition))))
                        (if (boundp 'hunchentoot:*request*)
                            (request-telemetry)
                            (list))
