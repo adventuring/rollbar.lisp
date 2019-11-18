@@ -268,8 +268,10 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
 (defvar *person-hook* nil
   "To add “person”  information to a Rollbar message,  create a function
 which examines its dynamic environment and  returns a plist of the form:
+@lisp
 '(:|person|   \(:|uid|  User-UI   :|username|  \"User   name\"  :|email|
-\"user@@example.com\"))")
+\"user@@example.com\"))
+@end lisp")
 
 (defun send-rollbar-notification (level message backtrace &key condition)
   "Send a notification to Rollbar."
