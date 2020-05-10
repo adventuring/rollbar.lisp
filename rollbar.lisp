@@ -29,9 +29,15 @@
 (defparameter *access-token* nil
   "The Rollbar access-token, created through their Web UI at:
 
+@verbatim
 https://rollbar.com/{team}/{project}/settings/access_tokens/
+@end verbatim
+
 eg:
-https://rollbar.com/CIWTA/Tootsville/settings/access_tokens/")
+
+@verbatim
+https://rollbar.com/CIWTA/Tootsville/settings/access_tokens/
+@end verbatim")
 
 (defparameter *environment* "unknown"
   "The runtime environment (cluster or situational group) to report as.
