@@ -253,7 +253,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
         :|server| (report-server-info)
         :|uuid| (princ-to-string (uuid:make-v4-uuid))
         :|notifier| (list :|name| "rollbar.lisp"
-                          :|version| "0.0.1")))
+                          :|version| "0.0.2")))
 
 (defun condition-telemetry (condition)
   (list :|exception| (list :|class| (princ-to-string (class-name (class-of condition)))
