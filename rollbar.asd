@@ -3,7 +3,7 @@
 (asdf:defsystem :rollbar
   :description "CL support for reporting to Rollbar"
   :author "Bruce-Robert Pocock"
-  :version "0.1"
+  :version "0.0.2"
   :maintainer "Bruce-Robert Pocock"
   :mailto "brpocock+rollbar-lisp@star-hope.org"
   :licence "BSD"
