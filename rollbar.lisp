@@ -244,7 +244,7 @@ For “info” or “debug,” returns *TRACE-OUTPUT*; otherwise
         :|type| "error"
         :|source| "server"
         :|timestamp_ms| (* 1000
-                           (- (get-universal-time*)
+                           (- (get-universal-time)
                               #.(encode-universal-time 0 0 0 1 1 1970)))
         :|platform| (software-type)
         :|code_version| *code-version*
